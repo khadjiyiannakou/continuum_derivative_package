@@ -1,0 +1,84 @@
+##### compiler params
+
+CXX=g++
+CXXFLAGS=-Wall -Wextra -g2 -DHAVE_INLINE -I$(GSL_ROOT)/include -I/lustre/jhome11/ecy00/ecy001/install/include/ -O3
+LDFLAGS=-L$(GSL_ROOT)/lib -L/lustre/jhome11/ecy00/ecy001/install/lib/
+LIBS=-lgslcblas -lgsl -lfftw -lrfftw
+PROGRAMS=Dq_2pt Dq_3pt Dq_cont_2pt Dq_cont_3pt Dq_latt_2pt Dq_latt_3pt FFT_2pt FFT_3pt fit_F_3 fit_F_3_over_2m fit_G_E fit_G_E_radius fit_G_E_temporal_insertion fit_G_M fit_G_M_on_axis fit_G_piNN_on_axis print_projector_tm print_projector_phys project_2pt test
+##### main target
+
+all: $(PROGRAMS)
+
+##### program targets
+
+Dq_2pt: Dq_2pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+Dq_3pt: Dq_3pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+Dq_cont_2pt: Dq_cont_2pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+Dq_cont_3pt: Dq_cont_3pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+Dq_latt_2pt: Dq_latt_2pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+Dq_latt_3pt: Dq_latt_3pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+FFT_2pt: FFT_2pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+FFT_3pt: FFT_3pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+fit_F_3: fit_F_3.o ../lib/analysis.o ../lib/io.o ../lib/correlator.o ../lib/parser.o ../lib/projectors.o ../lib/resampling.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+fit_F_3_over_2m: fit_F_3_over_2m.o ../lib/analysis.o ../lib/io.o ../lib/correlator.o ../lib/parser.o ../lib/projectors.o ../lib/resampling.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+fit_G_E: fit_G_E.o ../lib/analysis.o ../lib/io.o ../lib/correlator.o ../lib/parser.o ../lib/projectors.o ../lib/resampling.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+fit_G_E_radius: fit_G_E_radius.o ../lib/analysis.o ../lib/io.o ../lib/correlator.o ../lib/parser.o ../lib/projectors.o ../lib/resampling.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+fit_G_E_temporal_insertion: fit_G_E_temporal_insertion.o ../lib/analysis.o ../lib/io.o ../lib/correlator.o ../lib/parser.o ../lib/projectors.o ../lib/resampling.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+fit_G_M: fit_G_M.o ../lib/analysis.o ../lib/io.o ../lib/correlator.o ../lib/parser.o ../lib/projectors.o ../lib/resampling.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+fit_G_M_on_axis: fit_G_M_on_axis.o ../lib/analysis.o ../lib/io.o ../lib/correlator.o ../lib/parser.o ../lib/projectors.o ../lib/resampling.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+fit_G_piNN_on_axis: fit_G_piNN_on_axis.o ../lib/analysis.o ../lib/io.o ../lib/correlator.o ../lib/parser.o ../lib/projectors.o ../lib/resampling.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+print_projector_tm: print_projector_tm.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+print_projector_phys: print_projector_phys.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+project_2pt: project_2pt.o ../lib/correlator.o ../lib/io.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+test: test.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+#### dependencies
+
+%.o: %.cc
+	$(CXX) $^ -o $@ -c $(CXXFLAGS)
+
+##### clean up
+
+clean:
+	rm -f *~ *.o ../lib/*.o $(PROGRAMS)
+
+.PHONY: clean

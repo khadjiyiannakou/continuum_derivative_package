@@ -1,0 +1,48 @@
+##### compiler params
+
+CXX=g++
+CXXFLAGS=-Wall -Wextra -g2 -DHAVE_INLINE -I/homec/ecy00/ecy011/nedm_physical_point/Konstantin_code/zero_momentum_FF/install/include -O3
+LDFLAGS=-L/homec/ecy00/ecy011/nedm_physical_point/Konstantin_code/zero_momentum_FF/install/lib
+LIBS=-lgsl -lgslcblas -lfftw -lrfftw
+PROGRAMS=Dq_2pt Dq_3pt Dq_cont_2pt Dq_cont_3pt Dq_latt_2pt Dq_latt_3pt FFT_2pt FFT_3pt
+##### main target
+
+all: $(PROGRAMS)
+
+##### program targets
+
+Dq_2pt: Dq_2pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+Dq_3pt: Dq_3pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+Dq_cont_2pt: Dq_cont_2pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+Dq_cont_3pt: Dq_cont_3pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+Dq_latt_2pt: Dq_latt_2pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+Dq_latt_3pt: Dq_latt_3pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+FFT_2pt: FFT_2pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+FFT_3pt: FFT_3pt.o ../lib/io.o ../lib/correlator.o ../lib/projectors.o
+	$(CXX) $+ -o $@ $(CXXFLAGS) $(LDFLAGS) $(LIBS)
+
+#### dependencies
+
+%.o: %.cc
+	$(CXX) $^ -o $@ -c $(CXXFLAGS)
+
+##### clean up
+
+clean:
+	rm -f *~ *.o ../lib/*.o $(PROGRAMS)
+
+.PHONY: clean

@@ -1,0 +1,214 @@
+// AUTHOR: Konstantin Ottnad
+//
+// DATE: 20131212
+//
+// Implements:
+// - classes to read (in position space), write (in momentum space) and manipulate correlation function
+// - perform Fourier trafo for given momenta list, calculate derivative with respect to dq_i (i.e. spatial components of momentum)
+// - classes to read 2pt and 3pt fucntion in position space an build ratios
+#ifndef correlator_hh
+#define correlator_hh
+
+#include <complex>
+#include <cstring>
+#include <fftw.h>
+#include <rfftw.h>
+#include <iomanip>
+#include <stdlib.h>
+#include <gsl/gsl_sf.h>
+#include "./io.hh"
+#include "./projectors.hh"
+
+enum isospin_meson     {up, down};
+enum smearing_meson    {SS, LS};
+enum spin_meson        {spin_1, spin_g5, spin_gx, spin_gy, spin_gz, spin_gt, spin_g5gx, spin_g5gy, spin_g5gz, spin_5gt};
+enum isospin_nucleon   {ppm, pmm};
+enum spin_nucleon      {spin_1_1, spin_1_2, spin_2_1, spin_2_2};
+enum insertion_nucleon {s_loc, p_loc, v_loc, a_loc, t_loc, v_noe, aD, vD, tD, d1};
+enum corr_type         {corr_2pt, Dx_2pt, Dy_2pt, Dz_2pt, corr_3pt}; // there can only be 4 different 2pt functions but an (almost) arbitrary number of 3pt functions
+
+const double pi = 4. * atan(1.);
+const unsigned int no_isospin_meson = 2, no_smearing_meson = 2, no_spin_meson_meson = 10;
+const unsigned int no_isospin_nucleon = 2, no_spin_nucleon = 4, no_insertion_nucleon = 10;
+
+
+int get_isospin_nucleon(string isospin); // translate a nucleon isospin string into a corresponding 'isospin_nucleon' enum value (-1 if invalid)
+int get_spin_nucleon(string operators); // translate a nucleon spin string into a corresponding 'spin_nucleon' enum value (-1 if invalid)
+
+
+class xcorr // abstract base class for n-point functions
+{
+  protected:
+    enum modes {undefined, latt, cont, blockxyz, blockxyzsingle, FFTxyz, FFTxyzsingle}; // available modes for the FT's, so we can check for possibly incompatible calls to FT methods
+    int L, T, no_momenta, mode, radius, header_lines, error;
+    int no_t;
+    int *momenta;
+    int *t_values;
+    int x_source[4];
+    string filename;
+    binary_reader *reader;      // the input file reader
+    mixed_text_reader *mreader; // momenta list reader
+    complex<double> *corr;      // data in momentum space
+    complex<double> *x_corr;    // derivative data in momentum space in all three directions separately
+    complex<double> *y_corr;
+    complex<double> *z_corr;
+    void convert_fftw_complex(fftw_complex *in, complex<double> *out, int64_t size);
+    void convert_fftw_complex(complex<double> *in, fftw_complex *out, int64_t size);
+    // converts complex<double> * <-> fftw_complex * . Both arrays of size 'size' must be allocated by the caller. No error checking is performed
+    virtual int parse_header();
+    // parses the ascii header of the correlator input file
+    virtual int write_file(string fname, complex<double> *data) = 0;
+
+  public:
+    xcorr(string xfname, string pfname, string momentalist_fname);
+    virtual ~xcorr();
+    void FT_Dq_cont();
+    // calculates Fourier trafo x->q for given momentalist and continuum derivative with respect to q_i (i.e. spatial components, factor "x_i" in the FT)
+    void FT_Dq_latt();
+    // calculates Fourier trafo x->q for given momentalist and lattice derivative with respect to q_i (i.e. spatial components, factor "sin(x_i)" in the FT)
+    int get_L();
+    int get_T();
+    void set_filename();
+    virtual void FT_Dq_cont(int r) = 0;
+    // calculates Fourier trafo x->q with spatial 'radius' for given momentalist and continuum derivative with respect to q_i (i.e. spatial components, factor "x_i" in the FT). Sets mode=cont and requires mode==cont for iterative calculation. -> pure function
+    virtual void FT_Dq_latt(int r) = 0;
+    // calculates Fourier trafo x->q with spatial 'radius' for given momentalist and lattice derivative with respect to q_i (i.e. spatial components, factor "sin(x_i)" in the FT). Sets mode=latt and requires mode==latt for iterative calculation. -> pure function
+    virtual void block_xyz() = 0;
+    virtual void block_xyz(const unsigned int, const isospin_nucleon, const spin_nucleon) = 0;
+    // calculates all three block corrs with unsummed x,y or z component, while summing over the two other orthogonal components, i.e. projecting them to zero. Sets mode=block_xyz. The version with arguments is only meaningful for the 2pt case. -> pure function
+    virtual void FFT_xyz() = 0;
+    virtual void FFT_xyz(const unsigned int, const isospin_nucleon, const spin_nucleon) = 0;
+    // calculates the full lattice momentum dependence in x,y,z direction using FFT while projecting the other two "orthotogonal" componentes to zero (e.g. for (p_x, 0, 0) we FFT in "x" and sum over y,z. If block_xyz() was called previously (i.e. of mode===blockxyz is set) it uses the available results, otherwise it calls block_xyz() by itself before running the FFT. Sets mode==FFTxyz. The version with arguments is only meaningful for the 2pt case. -> pure function
+    void reset();
+    // deletes the corr, x_corr, y_corr and z_corr and resets the FT mode
+    int write_results(string prefix);
+    // writes the correlators in momentum space to the file given by pfilename, if pfilename="" write to stdout. 'prefix' allows to give different file names to 2pt and 3pt functions. Calls the class specific, virtual write_file() method.
+    virtual int write_results() = 0;
+    // allows for class specific implementation (e.g. hiding of setting the prefix explicitly)
+};
+
+
+class xcorr_2pt: public xcorr // implements 2pt functions
+{
+  private:
+    int index_sizes[3];
+    string *tags[3];    // list of tags corresponding to the values of each of the three indices (i.e. , isospin, gamma combination)
+    int parse_header();
+    int write_file(string fname, complex<double> *data);
+    // generic function to wite correlator data to a file, if fname="" write to stdout
+
+  public:
+    xcorr_2pt(string xfname, string pfname, string momentalist_fname);
+    virtual ~xcorr_2pt();
+    virtual void block_xyz();
+    virtual void block_xyz(const unsigned int proj, const isospin_nucleon isospin, const spin_nucleon spin);
+    virtual void FFT_xyz();
+    virtual void FFT_xyz(const unsigned int proj, const isospin_nucleon isospin, const spin_nucleon spin);
+    virtual void FT_Dq_cont(int r);
+    virtual void FT_Dq_latt(int r);
+    virtual int write_results();
+};
+
+
+class xcorr_3pt: public xcorr // implements 3pt functions
+{
+  private:
+    int site_size; // 2pt functions do not have any insertions ...
+    int parse_header();
+    int write_file(string fname, complex<double> *data); // function to write correlator data to a file, if fname="" write to stdout
+
+  public:
+    xcorr_3pt(string xfname, string pfname, string momentalist_fname);
+    virtual ~xcorr_3pt();
+    virtual void block_xyz();
+    virtual void block_xyz(const unsigned int, const isospin_nucleon, const spin_nucleon);
+    virtual void FFT_xyz();
+    virtual void FFT_xyz(const unsigned int, const isospin_nucleon, const spin_nucleon);
+    virtual void FT_Dq_cont(int r);
+    virtual void FT_Dq_latt(int r);
+    virtual int write_results(); 
+};
+
+
+class pcorr // abstract base class for momentum space n-point functions (as required to e.g. build ratios)
+{
+  protected:
+    mixed_text_reader *reader;
+    unsigned int tmax, tmin, no_momenta;
+    unsigned int monotony;     // set to 'true' by constructor if the momentum list is ordered w.r.t. increasing absolute momenta
+    unsigned int p_stride;     // file format dependent column-wise stride for momentum index (e.g. 1 for 3pt, 4*no_spin_nucleon for 2pt)
+    gsl_vector_complex **corr; // correlator, t-index runs in vector itself, additional * needed for:
+                               // - momentum (outermost, fastest), spin structure (interpolating field), isospin, projector (innermost, slowest) (-> for 2pt functions)
+                               // - momentum (outermost, fastest), spin index (insertion) (innermost, slowest) (-> 3pt function)
+                               // spin structure (insertion), isospin, projector are handled externally!!
+                               // vectors are allocated and calculated on demand only
+    int get_momentum_squared(unsigned int p_index); // returns p^2 for the given 'p_index'. Returns -1 if p_index is invalid
+
+  public:
+    pcorr(const string fname, const string format);
+    virtual ~pcorr();
+    virtual unsigned int get_error_id();
+    // returns the error state of the protected file reader (this is the only part that can cause non-code related errors)
+    virtual string get_error();
+    // same as above, but returns corresponding error message
+    virtual gsl_vector_complex *get_corr(const unsigned int, const unsigned int, const unsigned int, const unsigned int) = 0;
+    // returns correlator pointer for 2pt case 
+    virtual gsl_vector_complex *get_corr(const unsigned int, const unsigned int) = 0;
+    // overload for 3pt case
+    virtual void get_corr_momentum_averaged(gsl_vector_complex *result, const unsigned int, const unsigned int, const unsigned int, int) = 0;
+    // Returns correlator at |p| corresponding to p_index, averaged over all p with same |p|. '*result' must be allocated by the caller; 'p_index' has to be a valid index, no additional error checking is performed by this method
+    virtual void get_corr_momentum_averaged(gsl_vector_complex *result, const unsigned int, int) = 0;
+      // overload for 3pt case
+    virtual int get_first_matching_p_index(unsigned int p_index);
+    virtual unsigned int get_insertion_lex_index(unsigned int insertion_index[]) = 0;
+    virtual int get_momentum_index(const int momentum[]);
+    // returns the lexicographical (momentum list) index corresponding to given momentum p. returns an invalid index (-1) if the momentum is not in list
+    virtual unsigned int get_monotony();
+    // returns true if the momentum list is ordered w.r.t. increasing absolute momenta
+    virtual int get_next_matching_p_index(unsigned int p_index);
+    // search the momentum list for the next occurrence of a a momentum p with with |p|=|p[p_index]| starting at 'p_index'. If 'monotony'=true we assume that the list is sorted w.r.t. increasing absolute momenta. Returns invalid index if the momentum was not found.
+    virtual unsigned int get_no_momenta();
+    virtual unsigned int get_rank() = 0;
+    virtual unsigned int get_tmin();
+    virtual unsigned int get_tmax();
+};
+
+
+class pcorr_2pt_nucleon: public pcorr // class to handle the specific case of momentum space 2pt functions for nucleons (with all indices open)
+{
+  protected:
+  public:
+    pcorr_2pt_nucleon(const string fname, const string format);
+    virtual ~pcorr_2pt_nucleon();
+    virtual gsl_vector_complex *get_corr(const unsigned int proj, const unsigned int isospin, const unsigned int spin, const unsigned int p_index);
+    // returns a reference to the desired correlation function (only calculated on demand and stored for further calls in member 'corr')
+    virtual gsl_vector_complex *get_corr(const unsigned int, const unsigned int);
+    virtual void get_corr_momentum_averaged(gsl_vector_complex *result, const unsigned int proj, const unsigned int isospin, const unsigned int spin, int p_index);
+    virtual void get_corr_momentum_averaged(gsl_vector_complex *result, const unsigned int, int);
+    virtual unsigned int get_insertion_lex_index(unsigned int insertion_index[]);
+    // returns 0 (2pt function do not have insertions)
+    virtual unsigned int get_rank();
+    // returns 0 (2pt functions are always scalar)
+};
+
+
+class pcorr_npt_nucleon: public pcorr // class to handle momentum space npt functions for nucleons, can only handle a single npt function of definite spin. Allows only for an arbitrary number of 3pt-function-like 'insertion' indices. This class is also compatible with projected 2pt function of definite isospin and channel
+{
+  protected:
+    unsigned int rank;
+  public:
+    pcorr_npt_nucleon(const string filename, const string format, const unsigned int insertion_rank);
+    // 'insertion_rank' defines the tensor rank of the insertion
+    virtual gsl_vector_complex *get_corr(const unsigned int insertion_index, const unsigned int p_index);
+    // returns a reference to the desired correlation function (only generated on demand and stored for further calls in member 'corr')
+    virtual gsl_vector_complex *get_corr(const unsigned int, const unsigned int, const unsigned int, const unsigned int);
+    virtual void get_corr_momentum_averaged(gsl_vector_complex *result, const unsigned int insertion_index, int p_index);
+    virtual void get_corr_momentum_averaged(gsl_vector_complex *result, const unsigned int, const unsigned int, const unsigned int, int);
+    virtual unsigned int get_insertion_lex_index(unsigned int insertion_index[]);
+    // calculates the (lexicographical) index corresponding to a given n-tupel of insertions indices (assuming them to be arranged in a list without striding!). The size of the 'insertion[]' array most correspond to the tensor rank of the insertion
+    virtual unsigned int get_rank();
+    // returns the actual rank of the 3pt function tensor insertion
+    virtual ~pcorr_npt_nucleon();
+};
+
+#endif
